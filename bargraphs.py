@@ -30,9 +30,12 @@ import numpy as np
 
 
 labels = ['G1', 'G2', 'G3', 'G4', 'G5']
-values = [10, 20, 30, 40, 50]
+values = [10, 25, 29, 40, 55]
 
-plt.bar(labels, values, color=['red', 'blue', 'green', 'orange', 'purple'])
+bars = plt.bar(labels, values, color=['blue'])
+
+for bar in bars:
+    bar.set_hatch('/') ## add stripes to bars
 
 plt.legend(title='Groups')
 plt.show()
