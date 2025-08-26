@@ -1,4 +1,5 @@
 import os
+import sys
 import torch
 from torch import nn
 from torch.utils.data import DataLoader
@@ -42,15 +43,20 @@ model = SimpleNN().to('cpu')
 logits = model(images)
 
 
-def train():
+# max_batches = 200 ## Number of batches of images to train (above 100 runs slow)
+# num_epochs = 3 ## Number of times to loop through the dataset
+
+def train(max_batches, num_epochs):
     criterion = nn.CrossEntropyLoss()
     optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
 
-    num_epochs = 3
-
     for epoch in range(num_epochs):
         running_loss = 0.0
-        for images, labels in dataloader:
+        total_batches = min(len(dataloader), max_batches)
+        print(f"Epoch [{epoch+1}/{num_epochs}]")
+        for i, (images, labels) in enumerate(dataloader, 1):
+            if i > max_batches:
+                break
             # Forward pass
             outputs = model(images)
             loss = criterion(outputs, labels)
@@ -61,28 +67,56 @@ def train():
             optimizer.step()
 
             running_loss += loss.item()
+
+            progress = int(40 * i / total_batches)
+            bar = '[' + '#' * progress + '-' * (40 - progress) + ']'
+            print(f"\r{bar} {i}/{total_batches} batches", end='', flush=True)
         
-        avg_loss = running_loss / len(dataloader)
+        avg_loss = running_loss / total_batches
         print(f"Epoch [{epoch+1}/{num_epochs}], Loss: {avg_loss:.4f}")
+
+    torch.save(model.state_dict(), f"model_epoch_{num_epochs}_batches_{max_batches}.pth")
+    print("Model saved.")
 
     print("Training complete.")
 
-
-def test():
+def test(max_test_batches, num_epochs, batches): ## Limit how many batches to test on
+    model.load_state_dict(torch.load(f"model_epoch_{num_epochs}_batches_{batches}.pth"))
+    print("Model loaded for testing.")
     correct = 0
-    total = 0
+    total = 0  
     model.eval()  # Set model to evaluation mode
 
+
     with torch.no_grad():
-        for images, labels in dataloader:
+        for batch_idx, (images, labels) in enumerate(dataloader, 1):
+            if batch_idx > max_test_batches:
+                break
             outputs = model(images)
             _, predicted = torch.max(outputs, 1)
-            total += labels.size(0)
-            correct += (predicted == labels).sum().item()
+            for i in range(len(labels)):
+                is_correct = predicted[i].item() == labels[i].item()
+                print(
+                    f"[Test Batch {batch_idx} | Image {i+1}] "
+                    f"Label: {labels[i].item()} | Prediction: {predicted[i].item()} | "
+                    f"{'Correct' if is_correct else 'Wrong'}"
+                )
+                total += 1
+                if is_correct:
+                    correct += 1
 
-    accuracy = 100 * correct / total
-    print(f"Test Accuracy: {accuracy:.2f}%")
+    accuracy = 100 * correct / total if total > 0 else 0
+    print(f"Tested {total} images. Test Accuracy: {accuracy:.2f}%")
 
+Max_batches = 100 ## Number of batches of images to train (above 100 runs slow)
+Num_epochs = 3 ## Number of times to loop through the dataset
 
-train()
-test()
+if (not os.path.exists(f"model_epoch_{Num_epochs}_batches_{Max_batches}.pth")):
+    print("No model found. Training...")
+    train(Max_batches, Num_epochs)
+elif (os.path.exists(f"model_epoch_{Num_epochs}_batches_{Max_batches}.pth")):
+    print("Model found. Testing...")
+    test(10, Num_epochs, Max_batches)
+else:
+    print("Error at running training/testing")
+
